@@ -1,10 +1,151 @@
 import sys
+import random
 
+import matplotlib.pyplot as plt
 import numpy as np
-
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+from matplotlib.figure import Figure
 
 from interface import *
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5 import (
+    QtCore,
+    QtGui,
+    QtWidgets,
+)
+from PyQt5.QtWidgets import (
+    QMainWindow,
+    QVBoxLayout,
+    QPushButton,
+    QWidget,
+)
+
+
+class GraphWindow(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        fig = Figure(figsize=(5, 5))
+        self.can = FigureCanvasQTAgg(fig)
+        self.toolbar = NavigationToolbar2QT(self.can, self)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.can)
+
+        # here you can set up your figure/axis
+        self.ax = self.can.figure.add_subplot(111)
+
+    def plot_basic_line(self, X, Y, label):
+        # plot a basic line plot from x and y values.
+        self.ax.cla() # clears the axis
+        self.ax.plot(X, Y, label=label)
+        self.ax.grid(True)
+        self.ax.legend()
+        self.can.figure.tight_layout()
+        self.can.draw()
+
+
+class GraphRendererSignals(QtCore.QObject):
+    # SIGNALS
+    CLOSE = QtCore.pyqtSignal()
+
+class GraphRenderer(QtWidgets.QWidget):
+    def __init__(
+        self,
+        parent=None,
+        x_values=[],
+        y_values=[],
+    ):
+        super(GraphRenderer, self).__init__(parent)
+
+        self.x_values = x_values
+        self.y_values = y_values
+
+        fig = Figure(figsize=(5, 5), dpi=100)
+        canvas = FigureCanvas(fig)
+        ax = fig.add_subplot(111)
+
+        ax.plot(x_values, y_values, label='График функции')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+
+        ax.legend()
+        
+        # Создай новое окно для графика
+        graph_window = QtWidgets.QMainWindow()
+        graph_window.setWindowTitle('График')
+        graph_window.setGeometry(100, 100, 800, 600)
+
+        # Добавь виджет с графиком в центральную область окна
+        graph_window.setCentralWidget(canvas)
+
+        # Покажи окно с графиком
+        graph_window.show()
+
+        # make the window frameless
+        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+
+        self.fillColor = QtGui.QColor(30, 30, 30, 120)
+        self.penColor = QtGui.QColor("#333333")
+
+        self.popup_fillColor = QtGui.QColor(240, 240, 240, 255)
+        self.popup_penColor = QtGui.QColor(200, 200, 200, 255)
+
+        self.close_btn = QtWidgets.QPushButton(self)
+        self.close_btn.setText("x")
+        font = QtGui.QFont()
+        font.setPixelSize(18)
+        font.setBold(True)
+        self.close_btn.setFont(font)
+        self.close_btn.setStyleSheet("background-color: rgb(0, 0, 0, 0)")
+        self.close_btn.setFixedSize(30, 30)
+        self.close_btn.clicked.connect(self._onclose)
+
+        self.SIGNALS = GraphRendererSignals()
+
+    def resizeEvent(self, event):
+        s = self.size()
+        popup_width = 800
+        popup_height = 800
+        ow = int(s.width() / 2 - popup_width / 2)
+        oh = int(s.height() / 2 - popup_height / 2)
+        self.close_btn.move(ow + 265, oh + 5)
+
+    def paintEvent(self, event):
+        # This method is, in practice, drawing the contents of
+        # your window.
+
+        # get current window size
+        s = self.size()
+        qp = QtGui.QPainter()
+        qp.begin(self)
+        qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        qp.setPen(self.penColor)
+        qp.setBrush(self.fillColor)
+        qp.drawRect(0, 0, s.width(), s.height())
+
+        # drawpopup
+        qp.setPen(self.popup_penColor)
+        qp.setBrush(self.popup_fillColor)
+        popup_width = 800
+        popup_height = 800
+        ow = int(s.width() / 2 - popup_width / 2)
+        oh = int(s.height() / 2 - popup_height / 2)
+        qp.drawRoundedRect(ow, oh, popup_width, popup_height, 5, 5)
+
+        font = QtGui.QFont()
+        font.setPixelSize(18)
+        font.setBold(True)
+        qp.setFont(font)
+        qp.setPen(QtGui.QColor(70, 70, 70))
+        tolw, tolh = 80, -5
+
+        qp.end()
+
+    def _onclose(self):
+        print("Close")
+        self.SIGNALS.CLOSE.emit()
 
 
 class CAE(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -36,11 +177,37 @@ class CAE(QtWidgets.QMainWindow, Ui_MainWindow):
             self.menu_open.triggered.connect(self.file_open)
             self.menu_save.triggered.connect(self.file_save)
             self.menu_calc.triggered.connect(self.calc)
+            self.show_graph.triggered.connect(self.render_graph)
 
             self.menu_help.triggered.connect(self.help)
             self.menu_about.triggered.connect(self.info)
+
         except Exception as e:
             print(e)
+
+    def render_graph(self):
+        n_forces = self.calc()
+ 
+        y_values = n_forces
+        x_values = list(range(1, len(y_values) + 1))
+
+        graph_window = GraphWindow(self)
+        X, Y = (1, 2), (1, 2)
+        graph_window.plot_basic_line(X, Y, label='plot1')
+
+        """
+        self._popframe = GraphRenderer(self, x_values, y_values)
+
+        self._popframe.move(0, 0)
+        self._popframe.resize(self.width(), self.height())
+        self._popframe.SIGNALS.CLOSE.connect(self._closepopup)
+        self._popflag = True
+        self._popframe.show()
+        """
+
+    def _closepopup(self):
+        self._popframe.close()
+        self._popflag = False
 
     def calc(self):
         if self.check_arrays():
@@ -74,12 +241,14 @@ class CAE(QtWidgets.QMainWindow, Ui_MainWindow):
             """-vector b-"""
             f = [0] * u
             q = [0] * len(l)
+            q_2 = [0] * len(l)
 
             for i in range(len(self.force_type)):
                 if self.force_type[i] == 1:
                     f[self.force_SU[i]-1] = (self.force_value[i])
                 elif self.force_type[i] == 2:
-                    q[self.force_SU[i]-1] = (self.force_value[i]*l[self.force_SU[i]-1]/2)
+                    q[self.force_SU[i]-1] = (self.force_value[i] * l[self.force_SU[i] - 1] / 2)
+                    q_2[self.force_SU[i]-1] = self.force_value[i]
 
             b = [q[0] + f[0]]
             for i in range(1, u-1):
@@ -106,11 +275,43 @@ class CAE(QtWidgets.QMainWindow, Ui_MainWindow):
                 QtWidgets.QMessageBox.information(self,
                                                   "Результаты расчета", del_mes,
                                                   buttons=QtWidgets.QMessageBox.Close)
-
+                return self.calc_n_forces(delta, e, a, l, q_2, self.node_mas)
             else:
                 self.det_error()
 
         else: self.alert_nan()
+
+#n_forces=[],
+#sigma_tensions=[],
+#u_moves=[],
+    
+    def calc_n_forces(self, delta, e, a, l, q, node_mas):
+        print(delta, e, a, l, q, node_mas)
+        n_forces = []
+        u = delta
+        x = node_mas
+
+        for i in range(len(a)):
+            n_forces.append(self.calc_n(e[i], a[i], l[i], q[i], x[i], u[i], u[i + 1]))
+            n_forces.append(self.calc_n(e[i], a[i], l[i], q[i], x[i + 1], u[i], u[i + 1]))
+            print(i, n_forces)
+
+        if len(a) > 1:
+            crutch = n_forces[-3] - n_forces[-2]
+            print("crutch", crutch)
+            n_forces[-1] += crutch
+            n_forces[-2] += crutch
+
+        return n_forces
+
+    def calc_n(self, e, a, l, q, x, u1, u2):
+        return (e * a) * (u2 - u1) / l + (q * l / 2) * (1 - 2 * x / l)
+
+    def get_sigma_tensions(self, delta):
+        ...
+
+    def get_u_moves(self, delta):
+        ...
 
     def refresh_plot(self):
         try:
