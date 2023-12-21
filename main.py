@@ -267,6 +267,8 @@ class CAE(QtWidgets.QMainWindow, Ui_MainWindow):
             M = np.array(m)
             det = np.linalg.det(M)
             if det != 0:
+                print(M)
+                print(b)
                 delta = list(np.linalg.solve(M, b))
                 del_mes = 'deltas = ['
                 for i in delta:
